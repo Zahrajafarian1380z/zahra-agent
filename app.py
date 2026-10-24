@@ -57,7 +57,7 @@ def chat():
             }
         }
 
-        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        response = requests.post(url, json=payload, headers=headers, timeout=60)
         result = response.json()
 
         # اگر ارور از گوگل اومد، دقیق نشون بده
