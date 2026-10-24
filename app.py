@@ -40,7 +40,7 @@ def chat():
         }
 
         payload = {
-            "model": "google/gemma-2-9b-it:free",   # مدل رایگان و خوب
+            "model": "openrouter/free",   # مدل رایگان و خوب
             "messages": [
                 {"role": "system", "content": SITE_KNOWLEDGE},
                 {"role": "user", "content": user_message}
