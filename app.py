@@ -36,7 +36,7 @@ def chat():
             return jsonify({"reply": "خطا: کلید API تنظیم نشده. لطفاً متغیر محیطی GEMINI_API_KEY را چک کنید."})
 
         # مدل به‌روز (می‌تونی gemini-3.8-flash یا gemini-3.5-flash-lite هم بذاری)
-        model = "gemini-2.5-flash"   # یا gemini-3.8-flash
+        model = "gemini-3.8-flash"
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
 
         headers = {"Content-Type": "application/json"}
