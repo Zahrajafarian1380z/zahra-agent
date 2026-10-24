@@ -1,14 +1,10 @@
 import os
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-import google.generativeai as genai
+import requests
 
 app = Flask(__name__)
 CORS(app)
-
-# تنظیم کلید API
-api_key = os.environ.get("GEMINI_API_KEY")
-genai.configure(api_key=api_key)
 
 
 @app.route("/", methods=["GET"])
@@ -24,13 +20,25 @@ def chat():
     if not user_message:
       return jsonify({"reply": "لطفاً پیامی بنویسید."})
 
-    # استفاده از مدل استاندارد جمنای
-    model = genai.GenerativeModel("gemini-1.5-flash")
-    response = model.generate_content(user_message)
+    api_key = os.environ.get("GEMINI_API_KEY")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
 
-    return jsonify({"reply": response.text})
+    headers = {"Content-Type": "application/json"}
+    payload = {"contents": [{"parts": [{"text": user_message}]}]}
+
+    response = requests.post(url, json=payload, headers=headers)
+    result = response.json()
+
+    bot_reply = (
+        result.get("candidates", [{}])[0]
+        .get("content", {})
+        .get("parts", [{}])[0]
+        .get("text", "متوجه نشدم، لطفاً دوباره بگو.")
+    )
+
+    return jsonify({"reply": bot_reply})
   except Exception as e:
-    print("Error details:", str(e))
+    print("Error:", str(e))
     return jsonify({"reply": "خطایی رخ داد، لطفاً دوباره تلاش کنید."})
 
 
