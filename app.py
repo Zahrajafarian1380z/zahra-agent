@@ -21,7 +21,6 @@ def chat():
       return jsonify({"reply": "لطفاً پیامی بنویسید."})
 
     api_key = os.environ.get("GEMINI_API_KEY")
-    # استفاده از مدل gemini-pro روی بستر پایدار v1beta
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={api_key}"
 
     headers = {"Content-Type": "application/json"}
