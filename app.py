@@ -29,17 +29,27 @@ def chat():
     response = requests.post(url, json=payload, headers=headers)
     result = response.json()
 
-    bot_reply = (
-        result.get("candidates", [{}])[0]
-        .get("content", {})
-        .get("parts", [{}])[0]
-        .get("text", "متوجه نشدم، لطفاً دوباره بگو.")
-    )
+    # استخراج امن و دقیق پاسخ از جمنای
+    if "candidates" in result and len(result["candidates"]) > 0:
+      candidate = result["candidates"][0]
+      if (
+          "content" in candidate
+          and "parts" in candidate["content"]
+          and len(candidate["content"]["parts"]) > 0
+      ):
+        bot_reply = candidate["content"]["parts"][0].get("text", "")
+        if bot_reply:
+          return jsonify({"reply": bot_reply})
 
-    return jsonify({"reply": bot_reply})
+    if "error" in result:
+      return jsonify(
+          {"reply": f"خطای گوگل: {result['error'].get('message', 'نامشخص')}"}
+      )
+
+    return jsonify({"reply": "پاسخی از مدل دریافت نشد."})
   except Exception as e:
     print("Error:", str(e))
-    return jsonify({"reply": "خطایی رخ داد، لطفاً دوباره تلاش کنید."})
+    return jsonify({"reply": f"خطای سرور: {str(e)}"})
 
 
 if __name__ == "__main__":
