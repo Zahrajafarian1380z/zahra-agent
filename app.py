@@ -6,8 +6,14 @@ import google.generativeai as genai
 app = Flask(__name__)
 CORS(app)
 
+# تنظیم کلید API
 api_key = os.environ.get("GEMINI_API_KEY")
 genai.configure(api_key=api_key)
+
+
+@app.route("/", methods=["GET"])
+def home():
+  return "Zahra Agent Backend is Running!"
 
 
 @app.route("/chat", methods=["POST"])
@@ -18,12 +24,13 @@ def chat():
     if not user_message:
       return jsonify({"reply": "لطفاً پیامی بنویسید."})
 
-    # استفاده از مدل استاندارد فلش
+    # استفاده از مدل استاندارد جمنای
     model = genai.GenerativeModel("gemini-1.5-flash")
     response = model.generate_content(user_message)
+
     return jsonify({"reply": response.text})
   except Exception as e:
-    print(f"Error: {e}")
+    print("Error details:", str(e))
     return jsonify({"reply": "خطایی رخ داد، لطفاً دوباره تلاش کنید."})
 
 
