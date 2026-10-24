@@ -21,7 +21,7 @@ def chat():
       return jsonify({"reply": "لطفاً پیامی بنویسید."})
 
     api_key = os.environ.get("GEMINI_API_KEY")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
 
     headers = {"Content-Type": "application/json"}
     payload = {"contents": [{"parts": [{"text": user_message}]}]}
