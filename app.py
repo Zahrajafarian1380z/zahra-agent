@@ -21,11 +21,41 @@ POEMS = load_poems()
 print(f"✅ {len(POEMS)} شعر بارگذاری شد.")
 
 # ====================== جستجوی ساده ======================
-def search_poems(query, top_k=4):
+def search_poems(query, top_k=5):
     if not query or not POEMS:
         return []
 
     query = query.lower().strip()
+
+    # دیکشنری کلمات مشابه (می‌تونی هر چقدر خواستی اضافه کنی)
+    synonyms = {
+        "بارون": ["باران", "بارانی", "بارندگی", "نم‌نم", "نم نم"],
+        "باران": ["بارون", "بارانی", "بارندگی"],
+        "عاشقانه": ["عشق", "عاشق", "دلبر", "معشوق", "عاشقی"],
+        "عشق": ["عاشقانه", "عاشق", "دلبر"],
+        "غمگین": ["غم", "اندوه", "حزن", "دلتنگ", "دلگیر"],
+        "غم": ["غمگین", "اندوه", "حزن"],
+        "شاد": ["شادی", "خوشحالی", "سرور", "بهشتی"],
+        "شادی": ["شاد", "خوشحالی"],
+        "پاییز": ["خزان", "پاییزی"],
+        "بهار": ["بهاری", "نوروز", "اردیبهشت", "فروردین"],
+        "زمستان": ["زمستونی", "برف", "سرد"],
+        "شب": ["شبی", "شبانه"],
+        "دل": ["قلب", "سینه"],
+    }
+
+    # کلمات اصلی جستجو + مترادف‌ها
+    search_terms = set(re.findall(r"\w+", query))
+    expanded_terms = set(search_terms)
+
+    for word in list(search_terms):
+        if word in synonyms:
+            expanded_terms.update(synonyms[word])
+        # اضافه کردن خود کلمه بدون پسوندهای رایج
+        for suffix in ["ی", "انه", "ین", "ون"]:
+            if word.endswith(suffix) and len(word) > 3:
+                expanded_terms.add(word[:-len(suffix)])
+
     scored = []
 
     for poem in POEMS:
@@ -34,32 +64,36 @@ def search_poems(query, top_k=4):
         text = poem.get("text", "").lower()
         category = poem.get("category", "").lower()
         tags = " ".join(poem.get("tags", [])).lower()
+        full_content = f"{title} {text} {category} {tags}"
 
-        # امتیازدهی
-        if query in title:
-            score += 10
-        if query in text:
-            score += 6
-        if query in category:
-            score += 4
-        if query in tags:
-            score += 5
-
-        # کلمات کلیدی جداگانه
-        words = re.findall(r"\w+", query)
-        for word in words:
-            if len(word) < 2:
+        # امتیاز برای هر کلمه
+        for term in expanded_terms:
+            if len(term) < 2:
                 continue
-            if word in title:
+
+            if term in title:
+                score += 12
+            if term in text:
+                score += 5
+            if term in category:
+                score += 6
+            if term in tags:
+                score += 7
+
+            # اگر کلمه کامل داخل متن باشه امتیاز بیشتر
+            if f" {term} " in f" {text} ":
                 score += 3
-            if word in text:
-                score += 1.5
-            if word in tags:
-                score += 2
+
+        # اگر کل عبارت جستجو داخل عنوان باشه امتیاز خیلی بالا
+        if query in title:
+            score += 20
+        if query in text:
+            score += 10
 
         if score > 0:
             scored.append((score, poem))
 
+    # مرتب‌سازی و برگرداندن بهترین‌ها
     scored.sort(key=lambda x: x[0], reverse=True)
     return [p for _, p in scored[:top_k]]
 
