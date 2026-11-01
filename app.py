@@ -8,11 +8,9 @@ import requests
 app = Flask(__name__)
 CORS(app)
 
-# دریافت اطلاعات اتصال به Supabase از متغیرهای محیطی Render
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
-# ====================== بارگذاری اشعار ======================
 def load_poems():
     try:
         with open("poems.json", "r", encoding="utf-8") as f:
@@ -24,7 +22,6 @@ def load_poems():
 POEMS = load_poems()
 print(f"✅ {len(POEMS)} شعر بارگذاری شد.")
 
-# ====================== ذخیره چت‌ها در Supabase ======================
 def save_chat_log(user_msg, bot_reply):
     if not SUPABASE_URL or not SUPABASE_KEY:
         print("⚠️ Supabase credentials not set!")
@@ -41,11 +38,11 @@ def save_chat_log(user_msg, bot_reply):
             "user_msg": user_msg,
             "bot_reply": bot_reply
         }
-        requests.post(url, json=payload, headers=headers, timeout=5)
+        res = requests.post(url, json=payload, headers=headers, timeout=5)
+        print("Supabase save response:", res.status_code)
     except Exception as e:
         print("Error saving to Supabase:", e)
 
-# ====================== جستجوی پیشرفته در اشعار ======================
 def search_poems(query, top_k=4):
     if not query or not POEMS:
         return []
@@ -78,21 +75,19 @@ def search_poems(query, top_k=4):
     scored.sort(key=lambda x: x[0], reverse=True)
     return [p for _, p in scored[:top_k]]
 
-# ====================== پرامپت هوشمند و پیشنهاددهنده ======================
 BASE_PROMPT = """
-تو «دستیار آنلاین ادبی» و اختصاصی سایت زهرا جعفریان هستی.
-لحن‌ات گرم، شاعرانه، ادبی، صمیمی و پیشنهاددهنده است.
+تو «دستیار آنلاین ادبی» و صمیمیِ سایت زهرا جعفریان هستی. مثل یک انسان واقعی، با احساس، گرم و باهوش با مخاطب گفتگو کن.
 
-قوانین بسیار مهم رفتاری:
-1. تمرکز اصلی و اولویت اول تو، جستجو و پاسخگویی بر اساس «شعرهای مرتبط پیدا شده» از دیتابیس سایت است. اگر شعری مرتبط پیدا شد، حتماً متن، عنوان و لینک آن را به کاربر معرفی کن.
-2. اگر کاربر درباره موضوعی پرسید که مستقیماً در دیتابیس شعر و ترانه‌های سایت نبود، هرگز به او نگگو «اطلاعاتی ندارم» یا «نمی‌توانم جواب دهم». بلکه با همان لحن گرم و شاعرانه‌ات دوستانه به او پاسخ بده و در ابتدا یا انتهای سخنت به نرمی اشاره کن که این پرسش خارج از آرشیو تخصصی اشعار سایت است، اما با این حال با کمال میل به او پاسخ می‌دهی.
-3. هرگز و تحت هیچ شرایطی از علامت‌های مارکدان مانند ** یا __ استفاده نکن. متن باید کاملاً ساده باشد.
-4. عنوان شعر را ساده و بدون ستاره بنویس.
-5. لینک مطالعه در سایت را دقیقاً به شکل زیر قرار بده:
+قوانین سخت‌گیرانه و حیاتی:
+1. اولویت اول تو، شعرهای مرتبط پیدا شده از دیتابیس است. اگر شعر مرتبطی بود، با مهربانی آن را معرفی کن.
+2. اگر موضوعی خارج از دیتابیس بود یا کاربر حرف دیگری زد، ربات نباید خشک یا رباتیک برخورد کند؛ بلکه با کمال میل، صمیمیت و به زیبایی به او پاسخ بده و بگو که گرچه این موضوع در آرشیو اشعار نیست، اما با دل و جان همراهش هستی.
+3. ممنوعیت مطلق مارکدان: تحت هیچ شرایطی از علامت‌های ستاره (**)، هشتگ‌های اضافی (##)، خطوط تیره دوتایی یا فرمت‌های زشت مارکدان در متن استفاده نکن. متن باید کاملاً تمیز، ساده و بدون کاراکترهای اضافی باشد.
+4. عنوان شعر را کاملاً ساده و معمولی (بدون هیچ علامت یا ستاره‌ای) بنویس.
+5. لینک مطالعه در سایت را فقط به این شکل تمیز قرار بده:
 🔗 [مطالعه در سایت](لینک کامل)
 6. در انتهای هر پاسخ، خط منبع را دقیقاً به شکل زیر بنویس:
 منبع: زهرا جعفریان | zahrajafarian.freepage.cc
-7. در انتهای پاسخ‌هایت، حتماً با یک سوال گرم یا پیشنهاد مرتبط، مخاطب را به گفتگوی بیشتر دعوت کن.
+7. در انتهای پاسخ، با توجه به صحبت کاربر، یک سوال یا پیشنهاد کاملاً مرتبط برای ادامه گفتگو مطرح کن.
 """
 
 @app.route("/", methods=["GET"])
@@ -106,7 +101,7 @@ def chat():
         user_message = data.get("message", "").strip()
 
         if not user_message:
-            return jsonify({"reply": "سلام به آرشیو شعر و ترانه خوش آمدید! من دستیار آنلاین ادبی هستم. دوست داری چه موضوع یا شعری را با هم مرور کنیم؟"})
+            return jsonify({"reply": "سلام! من دستیار آنلاین ادبی هستم. خوشحالم که اینجا هستی. دوست داری درباره چه شعر یا موضوعی با هم گپ بزنیم؟"})
 
         api_key = os.environ.get("OPENROUTER_API_KEY")
         if not api_key:
@@ -128,7 +123,7 @@ def chat():
 ----------------------------
 """
         else:
-            context = "\n\n=== هیچ شعر مرتبطی در دیتابیس سایت پیدا نشد. ===\n"
+            context = "\n\n=== هیچ شعر مستقیمی در دیتابیس پیدا نشد، با لحن انسانی و صمیمی پاسخ بده. ===\n"
 
         system_content = BASE_PROMPT + context
 
@@ -146,7 +141,7 @@ def chat():
                 {"role": "system", "content": system_content},
                 {"role": "user", "content": user_message}
             ],
-            "temperature": 0.6,
+            "temperature": 0.7,
             "max_tokens": 1200
         }
 
@@ -157,9 +152,11 @@ def chat():
             return jsonify({"reply": f"خطا: {result['error'].get('message', str(result['error']))}"})
 
         bot_reply = result["choices"][0]["message"]["content"]
-        bot_reply = bot_reply.replace("**", "").replace("__", "")
+        
+        # پاکسازی کامل تمام هشتگ‌ها و ستاره‌های اضافی از خروجی ربات
+        bot_reply = re.sub(r'#+\s*', '', bot_reply)
+        bot_reply = bot_reply.replace("**", "").replace("__", "").replace("##", "")
 
-        # ذخیره امن در دیتابیس ابری Supabase
         save_chat_log(user_message, bot_reply)
 
         return jsonify({"reply": bot_reply})
@@ -168,7 +165,6 @@ def chat():
         print("Error:", str(e))
         return jsonify({"reply": f"خطای سرور: {str(e)}"})
 
-# مسیر برای خواندن تاریخچه چت‌ها از Supabase
 @app.route("/logs", methods=["GET"])
 def view_logs():
     if not SUPABASE_URL or not SUPABASE_KEY:
