@@ -1,7 +1,6 @@
 import os
 import json
 import re
-from datetime import datetime
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import requests
@@ -9,10 +8,11 @@ import requests
 app = Flask(__name__)
 CORS(app)
 
-# تنظیمات اتصال به Supabase (این مقادیر رو از داشبورد Supabase کپی کن و تو متغیرهای محیطی Render بذار)
+# دریافت اطلاعات اتصال به Supabase از متغیرهای محیطی Render
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
+# ====================== بارگذاری اشعار ======================
 def load_poems():
     try:
         with open("poems.json", "r", encoding="utf-8") as f:
@@ -24,9 +24,10 @@ def load_poems():
 POEMS = load_poems()
 print(f"✅ {len(POEMS)} شعر بارگذاری شد.")
 
-# ذخیره چت‌ها در دیتابیس ابری Supabase
+# ====================== ذخیره چت‌ها در Supabase ======================
 def save_chat_log(user_msg, bot_reply):
     if not SUPABASE_URL or not SUPABASE_KEY:
+        print("⚠️ Supabase credentials not set!")
         return
     try:
         url = f"{SUPABASE_URL}/rest/v1/chat_logs"
@@ -44,9 +45,11 @@ def save_chat_log(user_msg, bot_reply):
     except Exception as e:
         print("Error saving to Supabase:", e)
 
+# ====================== جستجوی پیشرفته در اشعار ======================
 def search_poems(query, top_k=4):
     if not query or not POEMS:
         return []
+
     query = query.lower().strip()
     search_terms = set(re.findall(r"\w+", query))
     
@@ -86,9 +89,9 @@ BASE_PROMPT = """
 3. عنوان شعر را ساده و بدون ستاره بنویس.
 4. لینک را دقیقاً به شکل زیر قرار بده:
 🔗 [مطالعه در سایت](لینک کامل)
-5. در انتهای هر پاسخ، خط منبع را **دقیقاً و فقط** به شکل زیر بنویس (بدون آوردن پیشوند https:// یا آدرس تکراری):
+5. در انتهای هر پاسخ، خط منبع را دقیقاً به شکل زیر بنویس (بدون آوردن پروتکل یا آدرس تکراری):
 منبع: زهرا جعفریان | zahrajafarian.freepage.cc
-6. قابلیت پیشنهاددهی هوشمند: در انتهای پاسخ‌هایت (بعد از منبع)، حتماً با یک سوال گرم یا پیشنهاد مرتبط، مخاطب را به گفتگوی بیشتر دعوت کن. مثلاً بپرس: «دوست داری شعر دیگری با همین مضمون برایت پیدا کنم؟» یا «می‌خواهی درباره ترانه‌های عاشقانه‌تر با هم گپ بزنیم؟»
+6. قابلیت پیشنهاددهی هوشمند: در انتهای پاسخ‌هایت، حتماً با یک سوال گرم یا پیشنهاد مرتبط، مخاطب را به گفتگوی بیشتر دعوت کن. مثلاً بپرس: «دوست داری شعر دیگری با همین مضمون برایت پیدا کنم؟» یا «می‌خواهی درباره ترانه‌های عاشقانه‌تر با هم گپ بزنیم؟»
 """
 
 @app.route("/", methods=["GET"])
@@ -102,7 +105,7 @@ def chat():
         user_message = data.get("message", "").strip()
 
         if not user_message:
-            return jsonify({"reply": "سلام! خوش آمدی. دوست داری درباره کدام یک از شعرهای سایت با هم گفتگو کنیم؟"})
+            return jsonify({"reply": "سلام به آرشیو شعر و ترانه خوش آمدید! من دستیار آنلاین ادبی هستم. دوست داری چه موضوع یا شعری را با هم مرور کنیم؟"})
 
         api_key = os.environ.get("OPENROUTER_API_KEY")
         if not api_key:
@@ -155,6 +158,7 @@ def chat():
         bot_reply = result["choices"][0]["message"]["content"]
         bot_reply = bot_reply.replace("**", "").replace("__", "")
 
+        # ذخیره امن در دیتابیس ابری Supabase
         save_chat_log(user_message, bot_reply)
 
         return jsonify({"reply": bot_reply})
@@ -163,13 +167,13 @@ def chat():
         print("Error:", str(e))
         return jsonify({"reply": f"خطای سرور: {str(e)}"})
 
-# مسیر برای خواندن تاریخچه از Supabase
+# مسیر برای خواندن تاریخچه چت‌ها از Supabase
 @app.route("/logs", methods=["GET"])
 def view_logs():
     if not SUPABASE_URL or not SUPABASE_KEY:
         return jsonify({"error": "Supabase not configured"})
     try:
-        url = f"{SUPABASE_URL}/rest/v1/chat_logs?select=*"
+        url = f"{SUPABASE_URL}/rest/v1/chat_logs?select=*&order=created_at.desc"
         headers = {
             "apikey": SUPABASE_KEY,
             "Authorization": f"Bearer {SUPABASE_KEY}"
