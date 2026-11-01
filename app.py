@@ -24,7 +24,6 @@ print(f"✅ {len(POEMS)} شعر بارگذاری شد.")
 
 def save_chat_log(user_msg, bot_reply):
     if not SUPABASE_URL or not SUPABASE_KEY:
-        print("⚠️ Supabase credentials not set!")
         return
     try:
         url = f"{SUPABASE_URL}/rest/v1/chat_logs"
@@ -35,11 +34,10 @@ def save_chat_log(user_msg, bot_reply):
             "Prefer": "return=minimal"
         }
         payload = {
-            "user_msg": user_msg,
-            "bot_reply": bot_reply
+            "user_msg": str(user_msg or ""),
+            "bot_reply": str(bot_reply or "")
         }
-        res = requests.post(url, json=payload, headers=headers, timeout=5)
-        print("Supabase save response:", res.status_code)
+        requests.post(url, json=payload, headers=headers, timeout=5)
     except Exception as e:
         print("Error saving to Supabase:", e)
 
@@ -47,16 +45,17 @@ def search_poems(query, top_k=4):
     if not query or not POEMS:
         return []
 
-    query = query.lower().strip()
+    query = str(query).lower().strip()
     search_terms = set(re.findall(r"\w+", query))
     
     scored = []
     for poem in POEMS:
         score = 0
-        title = poem.get("title", "").lower()
-        text = poem.get("text", "").lower()
-        category = poem.get("category", "").lower()
-        tags = " ".join(poem.get("tags", [])).lower()
+        title = str(poem.get("title", "") or "").lower()
+        text = str(poem.get("text", "") or "").lower()
+        category = str(poem.get("category", "") or "").lower()
+        tags_list = poem.get("tags", []) or []
+        tags = " ".join([str(t) for t in tags_list]).lower()
 
         for term in search_terms:
             if len(term) < 2:
@@ -79,15 +78,14 @@ BASE_PROMPT = """
 تو «دستیار آنلاین ادبی» و صمیمیِ سایت زهرا جعفریان هستی. مثل یک انسان واقعی، با احساس، گرم و باهوش با مخاطب گفتگو کن.
 
 قوانین سخت‌گیرانه و حیاتی:
-1. اولویت اول تو، شعرهای مرتبط پیدا شده از دیتابیس است. اگر شعر مرتبطی بود، با مهربانی آن را معرفی کن.
-2. اگر موضوعی خارج از دیتابیس بود یا کاربر حرف دیگری زد، ربات نباید خشک یا رباتیک برخورد کند؛ بلکه با کمال میل، صمیمیت و به زیبایی به او پاسخ بده و بگو که گرچه این موضوع در آرشیو اشعار نیست، اما با دل و جان همراهش هستی.
-3. ممنوعیت مطلق مارکدان: تحت هیچ شرایطی از علامت‌های ستاره (**)، هشتگ‌های اضافی (##)، خطوط تیره دوتایی یا فرمت‌های زشت مارکدان در متن استفاده نکن. متن باید کاملاً تمیز، ساده و بدون کاراکترهای اضافی باشد.
-4. عنوان شعر را کاملاً ساده و معمولی (بدون هیچ علامت یا ستاره‌ای) بنویس.
-5. لینک مطالعه در سایت را فقط و فقط به شکل دقیق زیر بنویس و به هیچ وجه کلمه انگلیسی یا کلمه دیگری داخل کروشه نگذار:
-🔗 [مطالعه در سایت](لینک کامل شعر))
-6. در انتهای هر پاسخ، خط منبع را دقیقاً به شکل زیر بنویس:
+1. اولویت اول تو، شعرهای مرتبط پیدا شده از دیتابیس است. اگر شعر مرتبطی بود، متن آن را به دلنشین‌ترین شکل بفرست.
+2. اگر موضوعی خارج از دیتابیس بود یا کاربر حرف دیگری زد، ربات نباید خشک برخورد کند؛ با کمال میل و صمیمیت پاسخ بده و بگو که گرچه این موضوع در آرشیو اشعار مستقیم نیست، اما با دل و جان همراهش هستی.
+3. ممنوعیت مطلق مارکدان و هشتگ: تحت هیچ شرایطی از علامت‌های ستاره (**)، هشتگ (## یا #) یا کاراکترهای مارکدان استفاده نکن. متن باید کاملاً ساده، پاک و روان باشد.
+4. لینک مطالعه در سایت را فقط و فقط به شکل دقیق زیر بنویس و هیچ کلمه‌ی انگلیسی یا اضافه‌ای داخل کروشه نگذار:
+🔗 [مطالعه در سایت](لینک کامل شعر)
+5. در انتهای هر پاسخ، خط منبع را دقیقاً به شکل زیر بنویس:
 منبع: زهرا جعفریان | zahrajafarian.freepage.cc
-7. در انتهای پاسخ، با توجه به صحبت کاربر، یک سوال یا پیشنهاد کاملاً مرتبط برای ادامه گفتگو مطرح کن.
+6. در انتهای پاسخ، با توجه به صحبت کاربر، یک سوال یا پیشنهاد کاملاً مرتبط برای ادامه گفتگو مطرح کن.
 """
 
 @app.route("/", methods=["GET"])
@@ -97,8 +95,8 @@ def home():
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
-        data = request.get_json()
-        user_message = data.get("message", "").strip()
+        data = request.get_json() or {}
+        user_message = str(data.get("message", "")).strip()
 
         if not user_message:
             return jsonify({"reply": "سلام! من دستیار آنلاین ادبی هستم. خوشحالم که اینجا هستی. دوست داری درباره چه شعر یا موضوعی با هم گپ بزنیم؟"})
@@ -113,13 +111,17 @@ def chat():
         if relevant_poems:
             context = "\n\n=== شعرهای مرتبط پیدا شده از سایت ===\n"
             for i, p in enumerate(relevant_poems, 1):
+                p_title = str(p.get('title', 'بدون عنوان') or 'بدون عنوان')
+                p_cat = str(p.get('category', 'نامشخص') or 'نامشخص')
+                p_link = str(p.get('link', 'https://zahrajafarian.freepage.cc') or 'https://zahrajafarian.freepage.cc')
+                p_text = str(p.get('text', '') or '')
                 context += f"""
 شعر {i}:
-عنوان: {p.get('title')}
-دسته‌بندی: {p.get('category', 'نامشخص')}
-لینک: {p.get('link')}
+عنوان: {p_title}
+دسته‌بندی: {p_cat}
+لینک: {p_link}
 متن کامل:
-{p.get('text')}
+{p_text}
 ----------------------------
 """
         else:
@@ -149,26 +151,35 @@ def chat():
         result = response.json()
 
         if "error" in result:
-            return jsonify({"reply": f"خطا: {result['error'].get('message', str(result['error']))}"})
+            err_msg = result['error'].get('message', str(result['error']))
+            return jsonify({"reply": f"خطا در ارتباط با هوش مصنوعی: {err_msg}"})
 
-        bot_reply = result["choices"][0]["message"]["content"]
+        choices = result.get("choices", [])
+        if not choices:
+            return jsonify({"reply": "پاسخی از مدل دریافت نشد."})
+
+        bot_reply = choices[0].get("message", {}).get("content", "")
+        bot_reply = str(bot_reply or "")
         
-        # پاکسازی کامل تمام هشتگ‌ها و ستاره‌های اضافی از خروجی ربات
+        # پاکسازی هشتگ‌ها و کاراکترهای اضافی
         bot_reply = re.sub(r'#+\s*', '', bot_reply)
         bot_reply = bot_reply.replace("**", "").replace("__", "").replace("##", "")
+
+        # اصلاح خودکار لینک‌های احتمالی معیوب مدل هوش مصنوعی
+        bot_reply = re.sub(r'\[.*?\]\((https?:\/\/[^\s)]+)\)', r'[مطالعه در سایت](\1)', bot_reply)
 
         save_chat_log(user_message, bot_reply)
 
         return jsonify({"reply": bot_reply})
 
     except Exception as e:
-        print("Error:", str(e))
-        return jsonify({"reply": f"خطای سرور: {str(e)}"})
+        print("Error in /chat route:", str(e))
+        return jsonify({"reply": "خطای سرور رخ داد. لطفاً چند لحظه دیگر دوباره تلاش کنید."})
 
 @app.route("/logs", methods=["GET"])
 def view_logs():
     if not SUPABASE_URL or not SUPABASE_KEY:
-        return jsonify({"error": "Supabase not configured"})
+        return "Supabase not configured", 500
     try:
         url = f"{SUPABASE_URL}/rest/v1/chat_logs?select=*&order=created_at.desc"
         headers = {
@@ -176,9 +187,54 @@ def view_logs():
             "Authorization": f"Bearer {SUPABASE_KEY}"
         }
         res = requests.get(url, headers=headers)
-        return jsonify(res.json())
+        logs = res.json() if res.status_code == 200 else []
+        
+        html = """
+        <!DOCTYPE html>
+        <html lang="fa" dir="rtl">
+        <head>
+            <meta charset="UTF-8">
+            <title>تاریخچه گفتگوهای دستیار ادبی</title>
+            <style>
+                body { font-family: Tahoma, sans-serif; background: #fff9fa; color: #333; padding: 20px; direction: rtl; }
+                h1 { color: #8B0000; text-align: center; font-size: 22px; margin-bottom: 20px; }
+                table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
+                th, td { padding: 12px 15px; border-bottom: 1px solid #ffe0e5; text-align: right; font-size: 13.5px; line-height: 1.8; }
+                th { background: #8B0000; color: #fff; font-size: 14px; }
+                tr:hover { background: #fff0f3; }
+                .time { color: #666; font-size: 11.5px; white-space: nowrap; }
+                .user-box { font-weight: bold; color: #8B0000; }
+                .bot-box { color: #222; }
+            </style>
+        </head>
+        <body>
+            <h1>📜 تاریخچه گفتگوهای دستیار آنلاین ادبی (زهرا جعفریان)</h1>
+            <table>
+                <tr>
+                    <th style="width: 15%;">زمان ثبت</th>
+                    <th style="width: 35%;">پیام کاربر</th>
+                    <th style="width: 50%;">پاسخ ربات</th>
+                </tr>
+        """
+        for log in logs:
+            time_str = str(log.get('created_at', ''))
+            user_msg = str(log.get('user_msg', ''))
+            bot_reply = str(log.get('bot_reply', '')).replace('\n', '<br>')
+            html += f"""
+                <tr>
+                    <td class="time">{time_str}</td>
+                    <td class="user-box">{user_msg}</td>
+                    <td class="bot-box">{bot_reply}</td>
+                </tr>
+            """
+        html += """
+            </table>
+        </body>
+        </html>
+        """
+        return html
     except Exception as e:
-        return jsonify({"error": str(e)})
+        return f"Error loading logs: {str(e)}"
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
