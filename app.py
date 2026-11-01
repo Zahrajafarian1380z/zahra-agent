@@ -9,7 +9,10 @@ import requests
 app = Flask(__name__)
 CORS(app)
 
-# ====================== بارگذاری اشعار ======================
+# تنظیمات اتصال به Supabase (این مقادیر رو از داشبورد Supabase کپی کن و تو متغیرهای محیطی Render بذار)
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+
 def load_poems():
     try:
         with open("poems.json", "r", encoding="utf-8") as f:
@@ -21,38 +24,29 @@ def load_poems():
 POEMS = load_poems()
 print(f"✅ {len(POEMS)} شعر بارگذاری شد.")
 
-# ====================== ذخیره تاریخچه چت‌ها ======================
+# ذخیره چت‌ها در دیتابیس ابری Supabase
 def save_chat_log(user_msg, bot_reply):
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return
     try:
-        log_file = "chat_history.json"
-        history = []
-        if os.path.exists(log_file):
-            with open(log_file, "r", encoding="utf-8") as f:
-                try:
-                    history = json.load(f)
-                except json.JSONDecodeError:
-                    history = []
-        
-        history.append({
-            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "user": user_msg,
-            "bot": bot_reply
-        })
-        
-        # نگهداری ۲۰۰ پیام آخر برای جلوگیری از حجیم شدن فایل
-        if len(history) > 200:
-            history = history[-200:]
-            
-        with open(log_file, "w", encoding="utf-8") as f:
-            json.dump(history, f, ensure_ascii=False, indent=4)
+        url = f"{SUPABASE_URL}/rest/v1/chat_logs"
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal"
+        }
+        payload = {
+            "user_msg": user_msg,
+            "bot_reply": bot_reply
+        }
+        requests.post(url, json=payload, headers=headers, timeout=5)
     except Exception as e:
-        print("Error saving chat log:", e)
+        print("Error saving to Supabase:", e)
 
-# ====================== جستجوی پیشرفته در اشعار ======================
 def search_poems(query, top_k=4):
     if not query or not POEMS:
         return []
-
     query = query.lower().strip()
     search_terms = set(re.findall(r"\w+", query))
     
@@ -67,19 +61,13 @@ def search_poems(query, top_k=4):
         for term in search_terms:
             if len(term) < 2:
                 continue
-            if term in title:
-                score += 15
-            if term in text:
-                score += 5
-            if term in category:
-                score += 8
-            if term in tags:
-                score += 10
+            if term in title: score += 15
+            if term in text: score += 5
+            if term in category: score += 8
+            if term in tags: score += 10
 
-        if query in title:
-            score += 30
-        if query in text:
-            score += 15
+        if query in title: score += 30
+        if query in text: score += 15
 
         if score > 0:
             scored.append((score, poem))
@@ -87,21 +75,20 @@ def search_poems(query, top_k=4):
     scored.sort(key=lambda x: x[0], reverse=True)
     return [p for _, p in scored[:top_k]]
 
-# ====================== پرامپت سیستم سخت‌گیرانه ======================
+# ====================== پرامپت هوشمند و پیشنهاددهنده ======================
 BASE_PROMPT = """
-تو دستیار هوشمند و اختصاصی سایت زهرا جعفریان هستی.
-لحن‌ات گرم، شاعرانه، ادبی و صمیمی است.
+تو «دستیار آنلاین ادبی» و اختصاصی سایت زهرا جعفریان هستی.
+لحن‌ات گرم، شاعرانه، ادبی، صمیمی و پیشنهاددهنده است.
 
 قوانین بسیار مهم:
 1. اولویت اول و مطلق تو، پاسخ دادن بر اساس «شعرهای مرتبط پیدا شده» از دیتابیس سایت است.
-2. هرگز و تحت هیچ شرایطی از علامت‌های مارکدان مانند ** یا __ برای ضخیم کردن متن استفاده نکن. متن باید کاملاً ساده و تمیز باشد.
+2. هرگز و تحت هیچ شرایطی از علامت‌های مارکدان مانند ** یا __ استفاده نکن. متن باید کاملاً ساده باشد.
 3. عنوان شعر را ساده و بدون ستاره بنویس.
-4. لینک را دقیقاً به شکل زیر و به صورت استاندارد قرار بده تا در فرانت‌اند قابل کلیک باشد:
+4. لینک را دقیقاً به شکل زیر قرار بده:
 🔗 [مطالعه در سایت](لینک کامل)
-5. اگر کاربر سوالی پرسید یا درخواستی داد که هیچ ارتباطی با شعرهای سایت نداشت و در بخش «شعرهای مرتبط» چیزی پیدا نشد، صراحتاً و با لحنی محترمانه به او بگو:
-«این مطلب در حال حاضر در آرشیو و مطالب سایت زهرا جعفریان وجود ندارد، اما...» (سپس پاسخی کوتاه بده یا راهنمایی‌اش کن که درباره اشعار سایت بپرسد).
-6. در پایان هر پاسخ دقیقاً این خط را قرار بده:
-منبع: زهرا جعفریان | https://zahrajafarian.freepage.cc/
+5. در انتهای هر پاسخ، خط منبع را **دقیقاً و فقط** به شکل زیر بنویس (بدون آوردن پیشوند https:// یا آدرس تکراری):
+منبع: زهرا جعفریان | zahrajafarian.freepage.cc
+6. قابلیت پیشنهاددهی هوشمند: در انتهای پاسخ‌هایت (بعد از منبع)، حتماً با یک سوال گرم یا پیشنهاد مرتبط، مخاطب را به گفتگوی بیشتر دعوت کن. مثلاً بپرس: «دوست داری شعر دیگری با همین مضمون برایت پیدا کنم؟» یا «می‌خواهی درباره ترانه‌های عاشقانه‌تر با هم گپ بزنیم؟»
 """
 
 @app.route("/", methods=["GET"])
@@ -115,13 +102,12 @@ def chat():
         user_message = data.get("message", "").strip()
 
         if not user_message:
-            return jsonify({"reply": "لطفاً پیامی بنویسید."})
+            return jsonify({"reply": "سلام! خوش آمدی. دوست داری درباره کدام یک از شعرهای سایت با هم گفتگو کنیم؟"})
 
         api_key = os.environ.get("OPENROUTER_API_KEY")
         if not api_key:
             return jsonify({"reply": "خطا: کلید API تنظیم نشده است."})
 
-        # جستجوی اشعار مرتبط
         relevant_poems = search_poems(user_message, top_k=3)
 
         context = ""
@@ -156,7 +142,7 @@ def chat():
                 {"role": "system", "content": system_content},
                 {"role": "user", "content": user_message}
             ],
-            "temperature": 0.5,
+            "temperature": 0.6,
             "max_tokens": 1200
         }
 
@@ -167,11 +153,8 @@ def chat():
             return jsonify({"reply": f"خطا: {result['error'].get('message', str(result['error']))}"})
 
         bot_reply = result["choices"][0]["message"]["content"]
-        
-        # پاکسازی نهایی برای اطمینان از حذف ستاره‌های ناخواسته احتمالی
         bot_reply = bot_reply.replace("**", "").replace("__", "")
 
-        # ذخیره تاریخچه گفتگو
         save_chat_log(user_message, bot_reply)
 
         return jsonify({"reply": bot_reply})
@@ -180,18 +163,22 @@ def chat():
         print("Error:", str(e))
         return jsonify({"reply": f"خطای سرور: {str(e)}"})
 
-# مسیر جدید برای خواندن تاریخچه چت‌ها توسط شما
+# مسیر برای خواندن تاریخچه از Supabase
 @app.route("/logs", methods=["GET"])
 def view_logs():
-    log_file = "chat_history.json"
-    if os.path.exists(log_file):
-        with open(log_file, "r", encoding="utf-8") as f:
-            try:
-                return jsonify(json.load(f))
-            except:
-                return jsonify([])
-    return jsonify([])
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return jsonify({"error": "Supabase not configured"})
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/chat_logs?select=*"
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}"
+        }
+        res = requests.get(url, headers=headers)
+        return jsonify(res.json())
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0",port=port)
+    app.run(0.0.0.0, port=port)
