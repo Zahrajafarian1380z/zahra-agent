@@ -1,4 +1,4 @@
-import os 
+import os
 import json
 import re
 from flask import Flask, jsonify, request
@@ -85,7 +85,7 @@ BASE_PROMPT = """
 🔗 [مطالعه در سایت](لینک کامل شعر)
 5. در انتهای هر پاسخ، خط منبع را دقیقاً به شکل زیر بنویس:
 منبع: زهرا جعفریان | zahrajafarian.freepage.cc
-6. بخش پیشنهادات تعاملی و پویا: در انتهای پاسخ خود، متناسب با حال و هوای پیام کاربر و شعر ارائه شده، یک پیشنهاد یا سوال جذاب و خلاقانه مطرح کن. این پیشنهاد نباید یک جمله کلیشه و تکراری باشد، بلکه باید کاملاً بر اساس صحبت‌های لحظه‌ای کاربر شکل بگیرد.
+6. در انتهای پاسخ، با توجه به صحبت کاربر، یک سوال یا پیشنهاد کاملاً مرتبط برای ادامه گفتگو مطرح کن.
 """
 
 @app.route("/", methods=["GET"])
@@ -161,8 +161,11 @@ def chat():
         bot_reply = choices[0].get("message", {}).get("content", "")
         bot_reply = str(bot_reply or "")
         
+        # پاکسازی هشتگ‌ها و کاراکترهای اضافی
         bot_reply = re.sub(r'#+\s*', '', bot_reply)
         bot_reply = bot_reply.replace("**", "").replace("__", "").replace("##", "")
+
+        # اصلاح خودکار لینک‌های احتمالی معیوب مدل هوش مصنوعی
         bot_reply = re.sub(r'\[.*?\]\((https?:\/\/[^\s)]+)\)', r'[مطالعه در سایت](\1)', bot_reply)
 
         save_chat_log(user_message, bot_reply)
@@ -172,6 +175,66 @@ def chat():
     except Exception as e:
         print("Error in /chat route:", str(e))
         return jsonify({"reply": "خطای سرور رخ داد. لطفاً چند لحظه دیگر دوباره تلاش کنید."})
+
+@app.route("/logs", methods=["GET"])
+def view_logs():
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return "Supabase not configured", 500
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/chat_logs?select=*&order=created_at.desc"
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}"
+        }
+        res = requests.get(url, headers=headers)
+        logs = res.json() if res.status_code == 200 else []
+        
+        html = """
+        <!DOCTYPE html>
+        <html lang="fa" dir="rtl">
+        <head>
+            <meta charset="UTF-8">
+            <title>تاریخچه گفتگوهای دستیار ادبی</title>
+            <style>
+                body { font-family: Tahoma, sans-serif; background: #fff9fa; color: #333; padding: 20px; direction: rtl; }
+                h1 { color: #8B0000; text-align: center; font-size: 22px; margin-bottom: 20px; }
+                table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
+                th, td { padding: 12px 15px; border-bottom: 1px solid #ffe0e5; text-align: right; font-size: 13.5px; line-height: 1.8; }
+                th { background: #8B0000; color: #fff; font-size: 14px; }
+                tr:hover { background: #fff0f3; }
+                .time { color: #666; font-size: 11.5px; white-space: nowrap; }
+                .user-box { font-weight: bold; color: #8B0000; }
+                .bot-box { color: #222; }
+            </style>
+        </head>
+        <body>
+            <h1>📜 تاریخچه گفتگوهای دستیار آنلاین ادبی (زهرا جعفریان)</h1>
+            <table>
+                <tr>
+                    <th style="width: 15%;">زمان ثبت</th>
+                    <th style="width: 35%;">پیام کاربر</th>
+                    <th style="width: 50%;">پاسخ ربات</th>
+                </tr>
+        """
+        for log in logs:
+            time_str = str(log.get('created_at', ''))
+            user_msg = str(log.get('user_msg', ''))
+            bot_reply = str(log.get('bot_reply', '')).replace('\n', '<br>')
+            html += f"""
+                <tr>
+                    <td class="time">{time_str}</td>
+                    <td class="user-box">{user_msg}</td>
+                    <td class="bot-box">{bot_reply}</td>
+                </tr>
+            """
+        html += """
+            </table>
+        </body>
+        </html>
+        """
+        return html
+    except Exception as e:
+        return f"Error loading logs: {str(e)}"
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
